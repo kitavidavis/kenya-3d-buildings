@@ -18,7 +18,67 @@ interface Props {
   onSelect: (result: { lat: number; lon: number; name: string }) => void
 }
 
-// Static known buildings (fallback while backend search is being built)
+// All 47 counties as searchable locations
+const KENYA_COUNTIES: Result[] = [
+  // Nairobi
+  { name: 'Nairobi',          city: 'Nairobi County',      lat: -1.2884, lon: 36.8218, usage: 'Civic', floors: 0 },
+  // Central
+  { name: 'Kiambu',           city: 'Kiambu County',       lat: -1.0314, lon: 36.8356, usage: 'Civic', floors: 0 },
+  { name: "Murang'a",         city: "Murang'a County",     lat: -0.7243, lon: 37.1529, usage: 'Civic', floors: 0 },
+  { name: 'Kirinyaga',        city: 'Kirinyaga County',    lat: -0.4990, lon: 37.2807, usage: 'Civic', floors: 0 },
+  { name: 'Nyeri',            city: 'Nyeri County',        lat: -0.4167, lon: 36.9500, usage: 'Civic', floors: 0 },
+  { name: 'Nyandarua',        city: 'Nyandarua County',    lat: -0.2716, lon: 36.3766, usage: 'Civic', floors: 0 },
+  // Eastern
+  { name: 'Machakos',         city: 'Machakos County',     lat: -1.5218, lon: 37.2695, usage: 'Civic', floors: 0 },
+  { name: 'Makueni',          city: 'Makueni County',      lat: -1.7835, lon: 37.6344, usage: 'Civic', floors: 0 },
+  { name: 'Kitui',            city: 'Kitui County',        lat: -1.3666, lon: 38.0099, usage: 'Civic', floors: 0 },
+  { name: 'Embu',             city: 'Embu County',         lat: -0.5309, lon: 37.4581, usage: 'Civic', floors: 0 },
+  { name: 'Tharaka-Nithi',    city: 'Tharaka-Nithi County',lat: -0.3381, lon: 37.6524, usage: 'Civic', floors: 0 },
+  { name: 'Meru',             city: 'Meru County',         lat:  0.0473, lon: 37.6494, usage: 'Civic', floors: 0 },
+  { name: 'Isiolo',           city: 'Isiolo County',       lat:  0.3541, lon: 37.5822, usage: 'Civic', floors: 0 },
+  { name: 'Marsabit',         city: 'Marsabit County',     lat:  2.3342, lon: 37.9947, usage: 'Civic', floors: 0 },
+  // Rift Valley
+  { name: 'Kajiado',          city: 'Kajiado County',      lat: -1.8511, lon: 36.7763, usage: 'Civic', floors: 0 },
+  { name: 'Narok',            city: 'Narok County',        lat: -1.0830, lon: 35.8699, usage: 'Civic', floors: 0 },
+  { name: 'Nakuru',           city: 'Nakuru County',       lat: -0.3031, lon: 36.0800, usage: 'Civic', floors: 0 },
+  { name: 'Laikipia',         city: 'Laikipia County',     lat:  0.0172, lon: 37.0744, usage: 'Civic', floors: 0 },
+  { name: 'Baringo',          city: 'Baringo County',      lat:  0.4926, lon: 35.7432, usage: 'Civic', floors: 0 },
+  { name: 'Elgeyo-Marakwet',  city: 'Elgeyo-Marakwet County', lat: 0.6699, lon: 35.5110, usage: 'Civic', floors: 0 },
+  { name: 'Nandi',            city: 'Nandi County',        lat:  0.2023, lon: 35.0985, usage: 'Civic', floors: 0 },
+  { name: 'Uasin Gishu',      city: 'Uasin Gishu County', lat:  0.5143, lon: 35.2698, usage: 'Civic', floors: 0 },
+  { name: 'Trans-Nzoia',      city: 'Trans-Nzoia County',  lat:  1.0174, lon: 35.0062, usage: 'Civic', floors: 0 },
+  { name: 'Kericho',          city: 'Kericho County',      lat: -0.3697, lon: 35.2836, usage: 'Civic', floors: 0 },
+  { name: 'Bomet',            city: 'Bomet County',        lat: -0.7863, lon: 35.3423, usage: 'Civic', floors: 0 },
+  { name: 'Samburu',          city: 'Samburu County',      lat:  1.0981, lon: 36.6996, usage: 'Civic', floors: 0 },
+  { name: 'West Pokot',       city: 'West Pokot County',   lat:  1.2378, lon: 35.1133, usage: 'Civic', floors: 0 },
+  { name: 'Turkana',          city: 'Turkana County',      lat:  3.1191, lon: 35.5970, usage: 'Civic', floors: 0 },
+  // Western
+  { name: 'Bungoma',          city: 'Bungoma County',      lat:  0.5636, lon: 34.5607, usage: 'Civic', floors: 0 },
+  { name: 'Busia',            city: 'Busia County',        lat:  0.4612, lon: 34.1113, usage: 'Civic', floors: 0 },
+  { name: 'Kakamega',         city: 'Kakamega County',     lat:  0.2831, lon: 34.7523, usage: 'Civic', floors: 0 },
+  { name: 'Vihiga',           city: 'Vihiga County',       lat:  0.0768, lon: 34.7219, usage: 'Civic', floors: 0 },
+  // Nyanza
+  { name: 'Kisumu',           city: 'Kisumu County',       lat: -0.1022, lon: 34.7617, usage: 'Civic', floors: 0 },
+  { name: 'Siaya',            city: 'Siaya County',        lat: -0.0612, lon: 34.2878, usage: 'Civic', floors: 0 },
+  { name: 'Homa Bay',         city: 'Homa Bay County',     lat: -0.5273, lon: 34.4570, usage: 'Civic', floors: 0 },
+  { name: 'Migori',           city: 'Migori County',       lat: -1.0634, lon: 34.4731, usage: 'Civic', floors: 0 },
+  { name: 'Kisii',            city: 'Kisii County',        lat: -0.6816, lon: 34.7667, usage: 'Civic', floors: 0 },
+  { name: 'Nyamira',          city: 'Nyamira County',      lat: -0.5632, lon: 34.9352, usage: 'Civic', floors: 0 },
+  // Coast
+  { name: 'Mombasa',          city: 'Mombasa County',      lat: -4.0435, lon: 39.6682, usage: 'Civic', floors: 0 },
+  { name: 'Kwale',            city: 'Kwale County',        lat: -4.1735, lon: 39.4522, usage: 'Civic', floors: 0 },
+  { name: 'Kilifi',           city: 'Kilifi County',       lat: -3.6305, lon: 39.8499, usage: 'Civic', floors: 0 },
+  { name: 'Malindi',          city: 'Kilifi County',       lat: -3.2138, lon: 40.1169, usage: 'Civic', floors: 0 },
+  { name: 'Taita-Taveta',     city: 'Taita-Taveta County', lat: -3.3960, lon: 38.5566, usage: 'Civic', floors: 0 },
+  { name: 'Tana River',       city: 'Tana River County',   lat: -1.4987, lon: 40.0311, usage: 'Civic', floors: 0 },
+  { name: 'Lamu',             city: 'Lamu County',         lat: -2.2696, lon: 40.9023, usage: 'Civic', floors: 0 },
+  // North Eastern
+  { name: 'Garissa',          city: 'Garissa County',      lat: -0.4531, lon: 39.6460, usage: 'Civic', floors: 0 },
+  { name: 'Wajir',            city: 'Wajir County',        lat:  1.7471, lon: 40.0573, usage: 'Civic', floors: 0 },
+  { name: 'Mandera',          city: 'Mandera County',      lat:  3.9373, lon: 41.8569, usage: 'Civic', floors: 0 },
+]
+
+// Landmark buildings (Nairobi)
 const KNOWN_BUILDINGS: Result[] = [
   { name: 'Times Tower',                        city: 'Nairobi', lat: -1.2879, lon: 36.8246, usage: 'Commercial', floors: 33 },
   { name: 'KICC Tower',                         city: 'Nairobi', lat: -1.2864, lon: 36.8172, usage: 'Civic',      floors: 28 },
@@ -33,6 +93,9 @@ const KNOWN_BUILDINGS: Result[] = [
   { name: 'Sheria House',                       city: 'Nairobi', lat: -1.2901, lon: 36.8193, usage: 'Civic',      floors: 9  },
 ]
 
+// Combined search index: counties first, then landmark buildings
+const ALL_RESULTS = [...KENYA_COUNTIES, ...KNOWN_BUILDINGS]
+
 export default function SearchBar({ onSelect }: Props) {
   const [query,   setQuery]   = useState('')
   const [results, setResults] = useState<Result[]>([])
@@ -46,7 +109,7 @@ export default function SearchBar({ onSelect }: Props) {
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       const lq = q.toLowerCase()
-      const hits = KNOWN_BUILDINGS.filter(b =>
+      const hits = ALL_RESULTS.filter(b =>
         b.name.toLowerCase().includes(lq) || b.city.toLowerCase().includes(lq)
       )
       setResults(hits.slice(0, 8))
@@ -109,7 +172,9 @@ export default function SearchBar({ onSelect }: Props) {
               <span className={`w-2 h-2 rounded-full shrink-0 ${USAGE_DOT[r.usage] ?? 'bg-zinc-500'}`} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white font-medium truncate">{r.name}</p>
-                <p className="text-xs text-zinc-500">{r.city} · {r.floors} fl · {r.usage}</p>
+                <p className="text-xs text-zinc-500">
+                  {r.city}{r.floors > 0 ? ` · ${r.floors} fl · ${r.usage}` : ' · County headquarters'}
+                </p>
               </div>
             </button>
           ))}
