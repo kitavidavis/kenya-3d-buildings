@@ -6,7 +6,7 @@ export async function fetchBuildings(
   radius: number,
   source: 'osm' | 'microsoft' = 'osm',
 ): Promise<GeoJSON.FeatureCollection> {
-  const url = `${API}/buildings?lat=${lat}&lon=${lon}&radius=${radius}&source=${source}&roads=true&parks=true`
+  const url = `${API}/buildings?lat=${lat}&lon=${lon}&radius=${radius}&source=${source}&roads=false&parks=false`
   const res = await fetch(url)
   if (!res.ok) {
     const text = await res.text()

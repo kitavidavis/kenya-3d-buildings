@@ -76,21 +76,6 @@ export default function CadastreMap({ geojson, onBuildingClick, selectedID }: Pr
             'fill-extrusion-vertical-gradient': true,
           } })
 
-        // Parks
-        map.addLayer({ id: 'park-fill', type: 'fill', source: 'cadastre',
-          filter: ['==', ['get', 'featureType'], 'park'],
-          paint: { 'fill-color': '#c8e6c4', 'fill-opacity': 0.55 } })
-
-        // Roads
-        map.addLayer({ id: 'road-line', type: 'line', source: 'cadastre',
-          filter: ['==', ['get', 'featureType'], 'road'],
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': '#aaa',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 14, ['*', ['get', 'widthM'], 0.4], 18, ['*', ['get', 'widthM'], 1.6]],
-            'line-opacity': ['interpolate', ['linear'], ['zoom'], 16, 0.6, 18, 0.2],
-          } })
-
         // Interactions
         map.on('click', 'bldg-fill', e => {
           const f = e.features?.[0]

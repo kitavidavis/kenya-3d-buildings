@@ -109,7 +109,7 @@ export default function QueryBar({ loading, buildingCount, params, onQuery, onDo
           <span>
             <span className="text-white font-semibold">{buildingCount.toLocaleString()}</span> buildings
             &nbsp;·&nbsp;
-            {source === 'microsoft' ? 'Microsoft AI footprints' : 'OpenStreetMap'} &nbsp;·&nbsp; {radius} m radius
+            {source === 'microsoft' ? 'Microsoft AI shapes' : 'OpenStreetMap'} &nbsp;·&nbsp; {radius} m radius
           </span>
           <button
             onClick={onDownloadGLB}
