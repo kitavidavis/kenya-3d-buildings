@@ -2,25 +2,17 @@
 
 import { useEffect, useRef } from 'react'
 import type { BuildingProperties } from '@/lib/types'
+import { registerPMTilesProtocol } from '@/lib/pmtiles-setup'
+
+const PMTILES_URL  = process.env.NEXT_PUBLIC_PMTILES_URL   // served from CDN
+const FALLBACK_API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 interface Props {
-  geojson:         GeoJSON.FeatureCollection | null
-  queryLocation:   { lat: number; lon: number; radius: number } | null
-  selectedID:      string | null
+  filter:          { usage: string | null; minFloors: number; maxFloors: number }
   colourByUsage:   boolean
+  searchTarget:    { lat: number; lon: number } | null
   onBuildingClick: (props: BuildingProperties | null) => void
-  onDoubleClick:   (lat: number, lon: number) => void
-}
-
-function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Feature {
-  const coords: [number, number][] = []
-  for (let i = 0; i <= 64; i++) {
-    const a = (i / 64) * 2 * Math.PI
-    const dLon = (radiusM * Math.cos(a)) / (111320 * Math.cos((lat * Math.PI) / 180))
-    const dLat = (radiusM * Math.sin(a)) / 111320
-    coords.push([lon + dLon, lat + dLat])
-  }
-  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: {} }
+  onStatsUpdate:   (count: number) => void
 }
 
 const USAGE_COLOURS: Record<string, string> = {
@@ -31,86 +23,119 @@ const USAGE_COLOURS: Record<string, string> = {
 }
 
 export default function CadastreMap({
-  geojson, queryLocation, selectedID, colourByUsage,
-  onBuildingClick, onDoubleClick,
+  filter, colourByUsage, searchTarget,
+  onBuildingClick, onStatsUpdate,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef       = useRef<any>(null)
   const readyRef     = useRef(false)
 
-  /* callbacks change every render — keep latest via ref to avoid re-running the init effect */
   const onBuildingClickRef = useRef(onBuildingClick)
-  const onDoubleClickRef   = useRef(onDoubleClick)
+  const onStatsUpdateRef   = useRef(onStatsUpdate)
   useEffect(() => { onBuildingClickRef.current = onBuildingClick }, [onBuildingClick])
-  useEffect(() => { onDoubleClickRef.current   = onDoubleClick   }, [onDoubleClick])
+  useEffect(() => { onStatsUpdateRef.current   = onStatsUpdate   }, [onStatsUpdate])
 
-  // ── Initialise map once ────────────────────────────────────────────────────
+  // ── Init map ───────────────────────────────────────────────────────────────
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return
 
-    import('maplibre-gl').then(mod => {
-      import('maplibre-gl/dist/maplibre-gl.css')
+    ;(async () => {
+      await registerPMTilesProtocol()
+      const mod = await import('maplibre-gl')
+      await import('maplibre-gl/dist/maplibre-gl.css')
 
       const map = new (mod as any).Map({
         container: containerRef.current!,
         style: 'https://tiles.openfreemap.org/styles/positron',
-        center: [36.8219, -1.2921],
-        zoom: 13,
-        pitch: 52,
-        bearing: -12,
+        center: [37.5, -0.5],   // Centred on Kenya
+        zoom: 6.5,
+        pitch: 0,
+        bearing: 0,
         antialias: true,
       })
 
       map.doubleClickZoom.disable()
-
       map.addControl(new (mod as any).NavigationControl({ showCompass: true }), 'bottom-left')
       map.addControl(new (mod as any).ScaleControl({ unit: 'metric' }), 'bottom-left')
 
-      map.on('load', () => {
-        // Remove Positron built-in building layers
+      map.on('load', async () => {
+        // Remove Positron's own building fill
         map.getStyle().layers
           .filter((l: any) => /building/i.test(l.id) || /building/i.test(l['source-layer'] ?? ''))
           .forEach((l: any) => { try { map.removeLayer(l.id) } catch (_) {} })
 
         map.setLight({ anchor: 'map', color: '#fff', intensity: 0.45, position: [1.5, 310, 35] })
 
-        // Sources
-        map.addSource('cadastre',     { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-        map.addSource('query-circle', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+        // ── Building source ────────────────────────────────────────────────
+        // If PMTiles URL is configured, load from the pre-built tile file.
+        // Otherwise fall back to an on-demand API source (dev mode).
+        if (PMTILES_URL) {
+          map.addSource('buildings', {
+            type: 'vector',
+            url: `pmtiles://${PMTILES_URL}`,
+            attribution: '© Kenya 3D Cadastre',
+          })
+        } else {
+          // Dev fallback: load from the FastAPI backend as GeoJSON
+          // (replace with actual URL in production)
+          map.addSource('buildings', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] },
+          })
+          console.warn('No NEXT_PUBLIC_PMTILES_URL set — buildings will not load in production mode')
+        }
 
-        // Query radius ring
-        map.addLayer({ id: 'q-fill',   type: 'fill', source: 'query-circle',
-          paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.07 } })
-        map.addLayer({ id: 'q-stroke', type: 'line', source: 'query-circle',
-          paint: { 'line-color': '#38bdf8', 'line-width': 1.5,
-                   'line-dasharray': [5, 3], 'line-opacity': 0.55 } })
+        const srcLayer = PMTILES_URL ? 'buildings' : undefined
 
-        // Building shadow
-        map.addLayer({ id: 'bldg-shadow', type: 'fill', source: 'cadastre',
+        // Shadow
+        map.addLayer({
+          id: 'bldg-shadow', type: 'fill', source: 'buildings',
+          ...(srcLayer ? { 'source-layer': srcLayer } : {}),
           filter: ['has', 'heightM'],
-          paint: { 'fill-color': '#000', 'fill-opacity': 0.1, 'fill-translate': [3, 4] } })
+          paint: { 'fill-color': '#000', 'fill-opacity': 0.1, 'fill-translate': [3, 4] },
+        })
 
-        // Buildings
-        map.addLayer({ id: 'bldg-fill', type: 'fill-extrusion', source: 'cadastre',
+        // Building extrusion
+        map.addLayer({
+          id: 'bldg-fill', type: 'fill-extrusion', source: 'buildings',
+          ...(srcLayer ? { 'source-layer': srcLayer } : {}),
           filter: ['has', 'heightM'],
+          minzoom: 13,
           paint: {
             'fill-extrusion-color': '#d6d3cf',
             'fill-extrusion-height': ['get', 'heightM'],
             'fill-extrusion-base': 0,
             'fill-extrusion-opacity': 0.93,
             'fill-extrusion-vertical-gradient': true,
-          } })
+          },
+        })
 
         // Selection highlight
-        map.addLayer({ id: 'bldg-select', type: 'fill-extrusion', source: 'cadastre',
+        map.addLayer({
+          id: 'bldg-select', type: 'fill-extrusion', source: 'buildings',
+          ...(srcLayer ? { 'source-layer': srcLayer } : {}),
           filter: ['==', 'buildingID', ''],
+          minzoom: 13,
           paint: {
             'fill-extrusion-color': '#38bdf8',
             'fill-extrusion-height': ['+', ['get', 'heightM'], 1.5],
             'fill-extrusion-base': 0,
             'fill-extrusion-opacity': 0.85,
             'fill-extrusion-vertical-gradient': true,
-          } })
+          },
+        })
+
+        // Footprint outlines (visible at high zoom)
+        map.addLayer({
+          id: 'bldg-outline', type: 'line', source: 'buildings',
+          ...(srcLayer ? { 'source-layer': srcLayer } : {}),
+          minzoom: 16,
+          paint: {
+            'line-color': '#fff',
+            'line-opacity': 0.08,
+            'line-width': 0.5,
+          },
+        })
 
         // Interactions
         map.on('click', 'bldg-fill', (e: any) => {
@@ -123,69 +148,63 @@ export default function CadastreMap({
         })
         map.on('mouseenter', 'bldg-fill', () => { map.getCanvas().style.cursor = 'pointer' })
         map.on('mouseleave', 'bldg-fill', () => { map.getCanvas().style.cursor = '' })
-        map.on('dblclick',  (e: any) => { onDoubleClickRef.current(e.lngLat.lat, e.lngLat.lng) })
+
+        // Update visible building count after any camera move
+        const updateCount = () => {
+          const features = map.queryRenderedFeatures({ layers: ['bldg-fill'] })
+          onStatsUpdateRef.current(features.length)
+        }
+        map.on('moveend', updateCount)
+        map.on('zoomend', updateCount)
 
         mapRef.current = map
         readyRef.current = true
       })
-    })
+    })()
 
     return () => { mapRef.current?.remove(); mapRef.current = null; readyRef.current = false }
   }, [])
 
-  // ── Sync buildings data ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!readyRef.current) return
-    mapRef.current?.getSource('cadastre')
-      ?.setData(geojson ?? { type: 'FeatureCollection', features: [] })
-
-    if (geojson?.features.length) {
-      const bldgs = geojson.features.filter((f: any) => f.properties?.buildingID)
-      if (bldgs.length > 0) {
-        let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity
-        bldgs.forEach((f: any) => {
-          if (f.geometry.type === 'Polygon') {
-            f.geometry.coordinates[0].forEach(([lon, lat]: [number, number]) => {
-              if (lon < minLon) minLon = lon; if (lon > maxLon) maxLon = lon
-              if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat
-            })
-          }
-        })
-        mapRef.current?.flyTo({
-          center: [(minLon + maxLon) / 2, (minLat + maxLat) / 2],
-          zoom: 16.5, pitch: 52, bearing: -12, duration: 1000,
-        })
-      }
-    }
-  }, [geojson])
-
-  // ── Sync colour mode ───────────────────────────────────────────────────────
+  // ── Filter ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!readyRef.current || !mapRef.current?.getLayer('bldg-fill')) return
-    const expr = colourByUsage
+
+    const conditions: any[] = ['all', ['has', 'heightM']]
+
+    if (filter.usage) {
+      conditions.push(['==', ['get', 'usage'], filter.usage])
+    }
+    if (filter.minFloors > 1) {
+      conditions.push(['>=', ['get', 'floors'], filter.minFloors])
+    }
+    if (filter.maxFloors < 50) {
+      conditions.push(['<=', ['get', 'floors'], filter.maxFloors])
+    }
+
+    const expr = conditions.length === 2 ? conditions[1] : conditions
+    mapRef.current.setFilter('bldg-fill', expr)
+    mapRef.current.setFilter('bldg-shadow', expr)
+  }, [filter])
+
+  // ── Colour mode ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!readyRef.current || !mapRef.current?.getLayer('bldg-fill')) return
+    const colour = colourByUsage
       ? ['match', ['get', 'usage'],
           ...Object.entries(USAGE_COLOURS).flatMap(([k, v]) => [k, v]),
           '#d6d3cf']
       : '#d6d3cf'
-    mapRef.current.setPaintProperty('bldg-fill', 'fill-extrusion-color', expr)
+    mapRef.current.setPaintProperty('bldg-fill', 'fill-extrusion-color', colour)
   }, [colourByUsage])
 
-  // ── Sync query radius circle ───────────────────────────────────────────────
+  // ── Fly to search target ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!readyRef.current) return
-    const src = mapRef.current?.getSource('query-circle')
-    if (!src) return
-    src.setData({
-      type: 'FeatureCollection',
-      features: queryLocation ? [circlePolygon(queryLocation.lat, queryLocation.lon, queryLocation.radius)] : [],
+    if (!readyRef.current || !searchTarget || !mapRef.current) return
+    mapRef.current.flyTo({
+      center: [searchTarget.lon, searchTarget.lat],
+      zoom: 17, pitch: 52, bearing: -12, duration: 1200,
     })
-  }, [queryLocation])
-
-  // ── Sync selection ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!readyRef.current || !mapRef.current?.getLayer('bldg-select')) return
-    mapRef.current.setFilter('bldg-select', ['==', 'buildingID', selectedID ?? ''])
-  }, [selectedID])
+  }, [searchTarget])
 
   return <div ref={containerRef} className="w-full h-full" />
 }

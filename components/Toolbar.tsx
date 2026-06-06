@@ -1,117 +1,79 @@
 'use client'
 
-import { Cpu, Database, Loader2, Layers3, Palette } from 'lucide-react'
-import type { DataSource } from '@/lib/types'
+import { Palette, Layers3, Globe2 } from 'lucide-react'
+import SearchBar from './SearchBar'
+import FilterPanel, { type FilterState } from './FilterPanel'
 
 interface Props {
-  loading:       boolean
-  buildingCount: number | null
-  totalGFA:      number | null
-  source:        DataSource
-  radius:        number
+  visibleCount:  number | null
   colourByUsage: boolean
-  onSourceChange: (s: DataSource) => void
-  onRadiusChange: (r: number) => void
-  onColourToggle: () => void
+  filter:        FilterState
+  onFilterChange:(f: FilterState) => void
+  onColourToggle:() => void
+  onSearch:      (target: { lat: number; lon: number; name: string }) => void
 }
 
 export default function Toolbar({
-  loading, buildingCount, totalGFA, source, radius,
-  colourByUsage, onSourceChange, onRadiusChange, onColourToggle,
+  visibleCount, colourByUsage, filter, onFilterChange, onColourToggle, onSearch,
 }: Props) {
   return (
-    <header className="absolute top-0 inset-x-0 z-20 flex items-center gap-3 px-4 py-3
-                        bg-[rgba(10,11,16,0.88)] backdrop-blur-md border-b border-white/[0.06]">
+    <header className="absolute top-0 inset-x-0 z-20 flex items-center gap-2.5 px-4 h-14
+                        border-b border-white/[0.06]"
+            style={{ background: 'rgba(9,10,15,0.90)', backdropFilter: 'blur(16px)' }}>
 
       {/* Brand */}
-      <div className="flex items-center gap-2 mr-1">
-        <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sm">
+      <div className="flex items-center gap-2.5 shrink-0 mr-1">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center
+                        bg-gradient-to-br from-sky-500/30 to-blue-600/20
+                        border border-sky-500/20 text-sm select-none">
           🏙️
         </div>
-        <span className="font-semibold text-sm tracking-tight hidden sm:block">
-          <span className="text-sky-400">Kenya</span>
-          <span className="text-white"> 3D Cadastre</span>
-        </span>
+        <div className="hidden sm:block">
+          <p className="text-xs font-bold tracking-tight leading-none">
+            <span className="text-sky-400">Kenya</span>
+            <span className="text-white"> 3D Cadastre</span>
+          </p>
+          <p className="text-[10px] text-zinc-600 leading-none mt-0.5">
+            National Building Registry
+          </p>
+        </div>
       </div>
 
       <div className="w-px h-5 bg-white/10 hidden sm:block" />
 
-      {/* Hint / stats */}
-      <div className="flex-1 min-w-0">
-        {loading ? (
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Loader2 size={12} className="animate-spin text-sky-400" />
-            Fetching buildings…
-          </div>
-        ) : buildingCount !== null ? (
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1.5 text-white font-semibold">
-              <Layers3 size={12} className="text-sky-400" />
-              {buildingCount.toLocaleString()} buildings
-            </span>
-            {totalGFA !== null && (
-              <span className="text-zinc-500 hidden sm:block">
-                {(totalGFA / 1000).toFixed(0)} k m² GFA
-              </span>
-            )}
-          </div>
-        ) : (
-          <p className="text-xs text-zinc-500">
-            Double-click the map to load buildings
-          </p>
-        )}
+      {/* Search */}
+      <div className="flex-1 max-w-xs">
+        <SearchBar onSelect={onSearch} />
       </div>
 
-      {/* Source toggle */}
-      <div className="flex rounded-lg overflow-hidden border border-white/10 shrink-0">
-        <button
-          onClick={() => onSourceChange('osm')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-all ${
-            source === 'osm'
-              ? 'bg-sky-600 text-white'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
-          }`}
-        >
-          <Database size={11} />
-          OSM
-        </button>
-        <button
-          onClick={() => onSourceChange('microsoft')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-all ${
-            source === 'microsoft'
-              ? 'bg-sky-600 text-white'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
-          }`}
-        >
-          <Cpu size={11} />
-          MS AI
-        </button>
-      </div>
+      {/* Stats */}
+      {visibleCount !== null && (
+        <div className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500">
+          <Layers3 size={12} className="text-sky-500" />
+          <span className="tabular-nums">
+            <span className="text-white font-semibold">{visibleCount.toLocaleString()}</span>
+            {' '}visible
+          </span>
+        </div>
+      )}
 
-      {/* Radius */}
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs text-zinc-500 w-14 text-right tabular-nums">{radius} m</span>
-        <input
-          type="range" min={200} max={1500} step={100} value={radius}
-          onChange={e => onRadiusChange(Number(e.target.value))}
-          className="w-20 accent-sky-500 cursor-pointer"
-        />
-      </div>
+      <div className="flex-1 sm:flex-none" />
 
-      <div className="w-px h-5 bg-white/10" />
+      {/* Filter */}
+      <FilterPanel value={filter} onChange={onFilterChange} />
 
       {/* Colour toggle */}
       <button
         onClick={onColourToggle}
-        title={colourByUsage ? 'Switch to uniform grey' : 'Colour by usage'}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+        title={colourByUsage ? 'Uniform grey (TU Delft style)' : 'Colour by usage type'}
+        className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs font-medium transition-all ${
           colourByUsage
             ? 'border-sky-500/50 bg-sky-500/10 text-sky-400'
-            : 'border-white/10 text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+            : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.07]'
         }`}
       >
-        <Palette size={12} />
-        <span className="hidden sm:inline">{colourByUsage ? 'Usage' : 'Grey'}</span>
+        <Palette size={13} />
+        <span className="hidden sm:inline">{colourByUsage ? 'By usage' : 'Grey'}</span>
       </button>
     </header>
   )
