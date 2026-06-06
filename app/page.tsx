@@ -1,77 +1,123 @@
-import Link from 'next/link'
-import { ArrowRight, Building2, Map, Download, Layers } from 'lucide-react'
+'use client'
 
-const FEATURES = [
-  { icon: Building2, title: '3D Building Data', desc: 'AI-detected footprints from Microsoft + OSM attributes. 800K+ buildings across Kenya.' },
-  { icon: Map,       title: 'Geographic Accuracy', desc: 'Buildings rendered at real WGS84 coordinates on an OpenStreetMap basemap.' },
-  { icon: Layers,    title: '16 Levels of Detail', desc: 'From footprint-only (LOD 0) to full facade with windows and doors (LOD 3).' },
-  { icon: Download,  title: 'Multiple Export Formats', desc: 'GeoJSON for web maps, GLB for Unity/Unreal/Blender, CityGML for GIS platforms.' },
-]
+import dynamic from 'next/dynamic'
+import { useState, useCallback, useRef } from 'react'
+import Toolbar       from '@/components/Toolbar'
+import BuildingPanel from '@/components/BuildingPanel'
+import { fetchBuildings } from '@/lib/api'
+import type { BuildingProperties, DataSource, QueryParams } from '@/lib/types'
 
-export default function HomePage() {
+const CadastreMap = dynamic(() => import('@/components/CadastreMap'), { ssr: false })
+
+export default function Page() {
+  const [geojson,       setGeojson]       = useState<GeoJSON.FeatureCollection | null>(null)
+  const [selected,      setSelected]      = useState<BuildingProperties | null>(null)
+  const [loading,       setLoading]       = useState(false)
+  const [error,         setError]         = useState<string | null>(null)
+  const [source,        setSource]        = useState<DataSource>('osm')
+  const [radius,        setRadius]        = useState(600)
+  const [colourByUsage, setColourByUsage] = useState(false)
+  const [queryLoc,      setQueryLoc]      = useState<{ lat: number; lon: number; radius: number } | null>(null)
+  const [hintVisible,   setHintVisible]   = useState(true)
+
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Derived stats
+  const buildingCount = geojson
+    ? geojson.features.filter(f => (f.properties as any)?.buildingID).length
+    : null
+
+  const totalGFA = geojson
+    ? geojson.features.reduce((sum, f) => {
+        const gfa = (f.properties as any)?.grossFloorAreaM2
+        return sum + (typeof gfa === 'number' ? gfa : 0)
+      }, 0)
+    : null
+
+  const handleDoubleClick = useCallback(async (lat: number, lon: number) => {
+    // Cancel any in-flight request
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
+
+    setHintVisible(false)
+    setLoading(true)
+    setError(null)
+    setSelected(null)
+    setQueryLoc({ lat, lon, radius })
+
+    try {
+      const data = await fetchBuildings(lat, lon, radius, source)
+      setGeojson(data)
+    } catch (e: any) {
+      if (e.name !== 'AbortError') setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [radius, source])
+
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
-      <nav className="fixed top-0 inset-x-0 z-10 flex items-center justify-between px-6 py-4 bg-zinc-950/80 backdrop-blur-sm border-b border-white/5">
-        <span className="font-bold text-base tracking-tight">🏙️ <span className="text-sky-400">Kenya</span> 3D Cadastre</span>
-        <div className="flex items-center gap-4">
-          <Link href="/explore" className="text-sm text-zinc-400 hover:text-white transition-colors">Explore</Link>
-          <Link href="/explore" className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-medium transition-colors">Open Map</Link>
+    <div className="relative w-screen h-screen bg-zinc-950 overflow-hidden">
+
+      {/* Full-screen map */}
+      <CadastreMap
+        geojson={geojson}
+        queryLocation={queryLoc}
+        selectedID={selected?.buildingID ?? null}
+        colourByUsage={colourByUsage}
+        onBuildingClick={setSelected}
+        onDoubleClick={handleDoubleClick}
+      />
+
+      {/* Top toolbar */}
+      <Toolbar
+        loading={loading}
+        buildingCount={buildingCount}
+        totalGFA={totalGFA}
+        source={source}
+        radius={radius}
+        colourByUsage={colourByUsage}
+        onSourceChange={setSource}
+        onRadiusChange={setRadius}
+        onColourToggle={() => setColourByUsage(v => !v)}
+      />
+
+      {/* Building detail panel */}
+      <BuildingPanel building={selected} onClose={() => setSelected(null)} />
+
+      {/* First-use hint */}
+      {hintVisible && !loading && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20
+                        flex items-center gap-2.5 px-5 py-3 rounded-2xl
+                        border border-white/10 shadow-xl
+                        text-sm text-zinc-300 pointer-events-none select-none"
+             style={{ background: 'rgba(10,11,16,0.88)', backdropFilter: 'blur(12px)' }}>
+          <span className="text-lg">👆</span>
+          <span>Double-click anywhere on the map to load buildings</span>
+          <kbd className="ml-1 px-1.5 py-0.5 rounded bg-white/10 text-xs text-zinc-400 font-mono">
+            {radius} m radius
+          </kbd>
         </div>
-      </nav>
+      )}
 
-      <section className="relative flex flex-col items-center justify-center min-h-screen px-6 text-center pt-16">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(56,189,248,0.08)_0%,_transparent_70%)] pointer-events-none" />
-        <div className="relative z-10 max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-sky-500/10 border border-sky-500/20 rounded-full text-sky-400 text-xs font-medium mb-8">
-            <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse" />
-            Powered by Microsoft AI · OpenStreetMap · TU Delft LOD framework
-          </div>
-          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight mb-6 leading-tight">
-            {"Kenya's first "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-blue-500">3D Cadastre</span>
-            {" platform"}
-          </h1>
-          <p className="text-lg text-zinc-400 leading-relaxed mb-10 max-w-xl mx-auto">
-            Query any area in Kenya and get 3D building footprints with height, usage, and cadastral attributes — ready for urban planning, property assessment, and game development.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/explore" className="flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-500 rounded-xl font-semibold text-base transition-colors shadow-lg shadow-sky-900/40">
-              Explore Nairobi CBD <ArrowRight size={18} />
-            </Link>
-            <a href="https://github.com/kitavidavis/3d-buildings-generator" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-6 py-3 border border-white/10 hover:border-white/20 rounded-xl text-zinc-400 hover:text-white font-medium text-base transition-colors">
-              View on GitHub
-            </a>
+      {/* Loading pulse overlay */}
+      {loading && queryLoc && (
+        <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
+          <div className="relative">
+            <div className="w-5 h-5 rounded-full bg-sky-400 opacity-80" />
+            <div className="anim-ping absolute inset-0 rounded-full bg-sky-400" />
           </div>
         </div>
-      </section>
+      )}
 
-      <section className="py-24 px-6 border-t border-white/5">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-3">Built for Kenya</h2>
-          <p className="text-zinc-400 text-center mb-12">EPSG:21037 · Arc 1960 / UTM Zone 37S · 8 major cities supported</p>
-          <div className="grid sm:grid-cols-2 gap-6">
-            {FEATURES.map(f => (
-              <div key={f.title} className="p-6 bg-zinc-900 border border-white/5 rounded-xl hover:border-white/10 transition-colors">
-                <div className="w-10 h-10 flex items-center justify-center bg-sky-500/10 text-sky-400 rounded-lg mb-4"><f.icon className="w-5 h-5" /></div>
-                <h3 className="font-semibold mb-2">{f.title}</h3>
-                <p className="text-sm text-zinc-400 leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
+      {/* Error toast */}
+      {error && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30
+                        max-w-sm px-4 py-2.5 rounded-xl border border-red-700/50
+                        bg-red-950/90 text-red-300 text-sm shadow-2xl"
+             onClick={() => setError(null)}>
+          {error}
         </div>
-      </section>
-
-      <section className="py-20 px-6 text-center border-t border-white/5">
-        <h2 className="text-2xl font-bold mb-4">Start exploring Kenya in 3D</h2>
-        <p className="text-zinc-400 mb-8">No account required. Select a city, set your radius, click Search.</p>
-        <Link href="/explore" className="inline-flex items-center gap-2 px-8 py-3 bg-sky-600 hover:bg-sky-500 rounded-xl font-semibold transition-colors">
-          Open the map <ArrowRight size={18} />
-        </Link>
-      </section>
-
-      <footer className="py-8 px-6 border-t border-white/5 text-center text-xs text-zinc-600">
-        Kenya 3D Cadastre · Built with Microsoft GlobalMLBuildingFootprints · OpenStreetMap contributors
-      </footer>
-    </main>
+      )}
+    </div>
   )
 }
