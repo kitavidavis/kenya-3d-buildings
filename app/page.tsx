@@ -13,6 +13,7 @@ import SolarPanel                                from '@/components/SolarPanel'
 import DevPotentialPanel                         from '@/components/DevPotentialPanel'
 import GrowthPanel,        { type GrowthResult } from '@/components/GrowthPanel'
 import FloodPanel                                from '@/components/FloodPanel'
+import CTAButton                                 from '@/components/CTAButton'
 import type { BuildingProperties }               from '@/lib/types'
 import type { FilterState }                      from '@/components/FilterPanel'
 import { exportCSV, exportPDFReport }            from '@/lib/export'
@@ -221,6 +222,8 @@ export default function Page() {
           onGrowthData={setGrowthResult}
         />
       )}
+
+      <CTAButton />
 
       {showFloodPanel && (
         <FloodPanel
