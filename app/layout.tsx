@@ -13,10 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kenya 3D Cadastre",
+  title: "Kenya 3D Buildings",
   description: "3D building footprints, heights and usage for any area in Kenya. Powered by Microsoft AI and OpenStreetMap.",
   openGraph: {
-    title: "Kenya 3D Cadastre",
+    title: "Kenya 3D Buildings",
     description: "Query any area in Kenya and get 3D building data ready for urban planning, property assessment and game development.",
     type: "website",
   },
@@ -32,7 +32,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>{children}</body>
     </html>
   );
 }
